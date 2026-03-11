@@ -1,0 +1,79 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
+:root {
+  --bg: #080c14;
+  --surface: #0f1623;
+  --card: #141c2e;
+  --border: #1e2d45;
+  --bull: #00d084;
+  --bear: #ff4d6d;
+  --accent: #3b82f6;
+  --gold: #f59e0b;
+  --text: #e2e8f0;
+  --muted: #64748b;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html,
+body {
+  background-color: var(--bg);
+  color: var(--text);
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--surface); }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--accent); }
+
+/* Score badges */
+.score-weak         { color: #64748b; }
+.score-accumulation { color: #f59e0b; }
+.score-strong       { color: #f97316; }
+.score-explosive    { color: #00d084; text-shadow: 0 0 8px rgba(0,208,132,0.5); }
+
+/* Table */
+.data-table th { color: var(--muted); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; }
+.data-table td { font-size: 0.82rem; }
+.data-table tr:hover { background: rgba(30,45,69,0.4); }
+
+/* Card */
+.glass-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+}
+
+/* Ticker badge */
+.ticker-badge {
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: var(--accent);
+}
+
+/* Bull/Bear */
+.bull { color: var(--bull); }
+.bear { color: var(--bear); }
+.neutral { color: #64748b; }
+
+/* Pulse dot */
+.live-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--bull);
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.4; transform: scale(1.3); }
+}
