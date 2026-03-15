@@ -18,3 +18,5 @@ aiohttp==3.11.11
 openpyxl==3.1.5
 python-multipart==0.0.20
 aiosmtplib==3.0.2
+beautifulsoup4==4.12.3
+lxml==5.2.2
