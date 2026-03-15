@@ -11,6 +11,8 @@ class Settings(BaseSettings):
     smtp_port: int = 587
     smtp_user: str = ""
     smtp_pass: str = ""
+    finnhub_api_key: str = ""
+    alpha_vantage_api_key: str = ""
     master_score_alert_threshold: float = 85.0
     cache_ttl_seconds: int = 30
 

@@ -29,6 +29,7 @@ _FEATURE_NAMES = [
     "short_interest",
     "volume_ratio",
     "insider_buying_flag",
+    "price_source_divergence",   # new: latency arbitrage / data anomaly signal
 ]
 
 _model = None
@@ -45,6 +46,8 @@ def _generate_training_data(n: int = 5000) -> Tuple[np.ndarray, np.ndarray]:
     short_interest = rng.uniform(0.01, 0.50, n)
     volume_ratio = rng.uniform(0.5, 6.0, n)
     insider_flag = rng.choice([0, 1], n, p=[0.75, 0.25])
+    # Price divergence: mostly 0 (no anomaly), occasional spike
+    price_divergence = rng.exponential(0.3, n)  # right-skewed, mostly near 0
 
     # Ground-truth breakout label: combination of signal strengths
     score = (
@@ -52,13 +55,14 @@ def _generate_training_data(n: int = 5000) -> Tuple[np.ndarray, np.ndarray]:
         np.clip(dark_pool, 0, 1) * 30 +
         np.clip(gamma_exp, 0, 1) * 20 +
         (volume_ratio - 1) * 8 +
-        insider_flag * 15
+        insider_flag * 15 +
+        np.clip(price_divergence, 0, 5) * 4   # divergence adds up to 20 pts
     )
     noise = rng.normal(0, 5, n)
     prob = 1 / (1 + np.exp(-(score + noise - 40) / 15))
     labels = (prob > 0.5).astype(int)
 
-    X = np.column_stack([options_flow, dark_pool, gamma_exp, short_interest, volume_ratio, insider_flag])
+    X = np.column_stack([options_flow, dark_pool, gamma_exp, short_interest, volume_ratio, insider_flag, price_divergence])
     return X, labels
 
 
@@ -87,14 +91,16 @@ def _train_model():
 
 
 def _fallback_score(options_score: float, dark_pool_normalized: float, gamma_normalized: float,
-                    short_interest: float, volume_ratio: float, insider_flag: int) -> float:
+                    short_interest: float, volume_ratio: float, insider_flag: int,
+                    price_divergence: float = 0.0) -> float:
     """Simple heuristic when XGBoost is unavailable."""
     raw = (
         options_score * 0.30 +
         max(0, dark_pool_normalized) * 30 +
         max(0, gamma_normalized) * 20 +
         (volume_ratio - 1) * 8 +
-        insider_flag * 15
+        insider_flag * 15 +
+        min(price_divergence, 5.0) * 4
     )
     return round(min(1.0, max(0.0, raw / 100)), 4)
 
@@ -107,6 +113,7 @@ def get_ai_signal(
     short_interest: float,
     volume_ratio: float,
     insider_buying_flag: int,
+    price_source_divergence: float = 0.0,
 ) -> AISignal:
     global _model, _scaler
 
@@ -119,13 +126,14 @@ def get_ai_signal(
 
     if _model is not None and _scaler is not None:
         X = np.array([[options_flow_score, dark_pool_norm, gamma_norm,
-                       short_interest, volume_ratio, insider_buying_flag]])
+                       short_interest, volume_ratio, insider_buying_flag, price_source_divergence]])
         X_scaled = _scaler.transform(X)
         prob = float(_model.predict_proba(X_scaled)[0][1])
         confidence = float(max(_model.predict_proba(X_scaled)[0]))
     else:
         prob = _fallback_score(options_flow_score, dark_pool_norm, gamma_norm,
-                               short_interest, volume_ratio, insider_buying_flag)
+                               short_interest, volume_ratio, insider_buying_flag,
+                               price_source_divergence)
         confidence = 0.65
 
     return AISignal(

@@ -86,6 +86,10 @@ class MarketData(BaseModel):
     short_interest: float
     high_52w: float
     low_52w: float
+    # Multi-provider arbitrage fields
+    price_divergence_flag: bool = False
+    price_source_divergence: float = 0.0   # max % diff between providers
+    data_sources: List[str] = []           # which providers returned data
 
 
 class AISignal(BaseModel):
@@ -138,6 +142,15 @@ class AlertPayload(BaseModel):
     timestamp: datetime = Field(default_factory=datetime.utcnow)
 
 
+class PriceArbitrageSignal(BaseModel):
+    ticker: str
+    sources: List[str]
+    prices: dict                           # {"finnhub": 182.5, "yahoo": 182.8, ...}
+    divergence_pct: float
+    is_anomaly: bool
+    timestamp: datetime = Field(default_factory=datetime.utcnow)
+
+
 class SignalResponse(BaseModel):
     ticker: str
     score: float
@@ -152,6 +165,9 @@ class SignalResponse(BaseModel):
     price: float
     change_pct: float
     market_cap: float
+    price_divergence_flag: bool = False
+    price_source_divergence: float = 0.0
+    data_sources: List[str] = []
 
 
 class PricePoint(BaseModel):

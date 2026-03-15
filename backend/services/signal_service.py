@@ -98,6 +98,7 @@ def compute_master_signal(ticker: str) -> MasterSignal:
         short_interest=mkt.short_interest,
         volume_ratio=mkt.volume_ratio,
         insider_buying_flag=insider_flag,
+        price_source_divergence=mkt.price_source_divergence,
     )
     ai_score = ai_sig.breakout_probability * 100
 
@@ -179,6 +180,9 @@ async def get_all_signals(use_cache: bool = True) -> List[SignalResponse]:
             price=s.market_data.price,
             change_pct=s.market_data.change_pct,
             market_cap=s.market_data.market_cap,
+            price_divergence_flag=s.market_data.price_divergence_flag,
+            price_source_divergence=s.market_data.price_source_divergence,
+            data_sources=s.market_data.data_sources,
         )
         for s in signals_raw
     ]
@@ -217,6 +221,7 @@ async def get_stock_detail(ticker: str) -> StockDetailResponse:
         short_interest=master.market_data.short_interest,
         volume_ratio=master.market_data.volume_ratio,
         insider_buying_flag=1 if master.insider_buying_score > 0 else 0,
+        price_source_divergence=master.market_data.price_source_divergence,
     )
 
     return StockDetailResponse(

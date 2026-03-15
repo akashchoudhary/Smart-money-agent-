@@ -12,7 +12,9 @@ from fastapi.responses import StreamingResponse
 
 from services.signal_service import get_all_signals, get_stock_detail, compute_master_signal
 from engines.alert_engine import get_recent_alerts
-from models.signals import SignalResponse, StockDetailResponse
+from engines.price_arbitrage_engine import fetch_multi_provider
+from config import get_settings
+from models.signals import SignalResponse, StockDetailResponse, PriceArbitrageSignal
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -130,6 +132,42 @@ async def ai_predictions(limit: int = Query(20, le=100)):
 @router.get("/alerts")
 async def alerts(limit: int = Query(50, le=200)):
     return get_recent_alerts(limit)
+
+
+# ------------------------------------------------------------------
+# GET /arbitrage  — tickers with price divergence across providers
+# ------------------------------------------------------------------
+@router.get("/arbitrage", response_model=list)
+async def arbitrage_signals(
+    min_divergence: float = Query(0.0, description="Minimum divergence % to include"),
+    limit: int = Query(30, le=100),
+):
+    """
+    Returns price divergence data for all tracked tickers across
+    Finnhub, Yahoo Finance, and Alpha Vantage.
+    Tickers with divergence > 0.5% are flagged as potential arbitrage opportunities.
+    """
+    settings = get_settings()
+    if not settings.finnhub_api_key:
+        raise HTTPException(status_code=503, detail="FINNHUB_API_KEY not configured")
+
+    signals = await get_all_signals()
+    rows = [
+        {
+            "ticker":                  s.ticker,
+            "price":                   s.price,
+            "change_pct":              s.change_pct,
+            "divergence_pct":          s.price_source_divergence,
+            "is_anomaly":              s.price_divergence_flag,
+            "data_sources":            s.data_sources,
+            "master_score":            s.score,
+            "signal":                  s.signal,
+        }
+        for s in signals
+        if s.price_source_divergence >= min_divergence
+    ]
+    rows.sort(key=lambda r: r["divergence_pct"], reverse=True)
+    return rows[:limit]
 
 
 # ------------------------------------------------------------------

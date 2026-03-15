@@ -4,6 +4,15 @@ Smart Money Intelligence Platform — FastAPI entry point.
 import logging
 from contextlib import asynccontextmanager
 
+# Patch Python's SSL to use the native macOS/Windows/Linux trust store.
+# Required when running behind corporate proxies (e.g. Zscaler) that
+# install their own CA into the OS keychain but not into certifi's bundle.
+try:
+    import truststore
+    truststore.inject_into_ssl()
+except ImportError:
+    pass
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
