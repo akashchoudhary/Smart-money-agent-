@@ -84,6 +84,14 @@ XGBoost binary classifier (`engines/ai_signal_engine.py`) with 7 features:
 
 Model trains on 5,000 synthetic samples at import time. Falls back to a heuristic formula if XGBoost is unavailable.
 
+### Real Data: Insider Trades & Options Flow
+
+**Insider Engine** (`engines/insider_engine.py`): Scrapes [OpenInsider.com](https://openinsider.com) for SEC Form 4 filings with transaction value > $1M (both purchases and sales, past 2 years). Uses `beautifulsoup4`/`lxml` to parse the `tinker` HTML table. Falls back to seeded mock data on any network/parse error.
+
+**Options Flow Engine** (`engines/options_flow_engine.py`): Fetches live options chains from Yahoo Finance via `yfinance` (`Ticker.option_chain(expiry)`) for the 3 nearest expiry dates. Computes premium = lastPrice × volume × 100 and vol/OI ratio. Falls back to seeded mock data on failure.
+
+Both engines use `logger.warning()` on failure — **no exception is raised**. This means behind Zscaler (local dev) or on transient network errors, the app silently uses mock data. On AWS App Runner the real data sources are active.
+
 ### SSL / Corporate Proxy
 
 `main.py` calls `truststore.inject_into_ssl()` at startup to patch Python's SSL with the native OS trust store. Required when running behind Zscaler or other corporate proxies that install their own CA into the system keychain. On AWS (App Runner), this is a no-op and doesn't interfere.
