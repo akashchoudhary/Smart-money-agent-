@@ -1,6 +1,8 @@
 import axios from 'axios'
 import type { SignalResponse, StockDetailResponse } from './types'
 
+export type { SignalResponse, StockDetailResponse }
+
 const BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
 export const api = axios.create({ baseURL: BASE, timeout: 15000 })

@@ -3,8 +3,9 @@ __pycache__/
 *.pyc
 *.pyo
 *.pyd
+*.swp
 venv/
-.env
+backend/.env          # contains real API keys — never commit
 
 # Node
 node_modules/

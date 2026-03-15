@@ -106,7 +106,7 @@ export default function StockDetail() {
       {/* Score + sub-scores */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="glass-card p-5 flex flex-col items-center gap-3">
-          <ScoreGauge score={ms.master_score} label />
+          <ScoreGauge score={ms.master_score} label="master" />
           <p className="text-xs text-center" style={{ color: '#64748b' }}>
             Master Score — weighted composite of all signals
           </p>
