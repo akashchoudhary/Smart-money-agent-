@@ -45,6 +45,11 @@ export async function fetchAlerts() {
   return data
 }
 
+export async function fetchLogs(limit = 100) {
+  const { data } = await api.get('/logs', { params: { limit } })
+  return data
+}
+
 export const exportUrls = {
   csv: `${BASE}/export/csv`,
   json: `${BASE}/export/json`,
@@ -74,6 +79,25 @@ export function fmtMoney(n: number): string {
   if (Math.abs(n) >= 1e6) return `$${(n / 1e6).toFixed(1)}M`
   if (Math.abs(n) >= 1e3) return `$${(n / 1e3).toFixed(0)}K`
   return `$${n.toFixed(0)}`
+}
+
+export function stockDetailToSignal(d: StockDetailResponse): SignalResponse {
+  const ms = d.master_signal
+  return {
+    ticker: d.ticker,
+    score: ms.master_score,
+    breakout_probability: ms.breakout_probability,
+    dark_pool_flow: d.dark_pool_history?.[0]?.dark_pool_net_flow ?? 0,
+    signal: ms.direction as 'bullish' | 'bearish' | 'neutral',
+    options_flow_score: ms.options_flow_score,
+    gamma_score: ms.gamma_exposure_score,
+    volume_spike_score: ms.volume_spike_score,
+    insider_score: ms.insider_buying_score,
+    institutional_score: ms.institutional_flow_score,
+    price: d.market_data.price,
+    change_pct: d.market_data.change_pct,
+    market_cap: d.market_data.market_cap,
+  }
 }
 
 export function fmtMarketCap(n: number): string {

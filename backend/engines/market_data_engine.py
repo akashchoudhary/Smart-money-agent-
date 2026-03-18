@@ -22,6 +22,7 @@ _SSL_VERIFY = certifi.where()
 from config import get_settings
 from engines.price_arbitrage_engine import fetch_multi_provider, ArbitrageResult
 from models.signals import MarketData, PricePoint
+from services.log_service import add_log, SOURCE_REAL, SOURCE_MOCK, SOURCE_ERROR
 
 logger = logging.getLogger(__name__)
 
@@ -243,11 +244,15 @@ def get_market_data(ticker: str) -> MarketData:
             )
             md = _build_market_data_from_arbitrage(ticker, arb)
             if md is not None:
+                sources_str = "+".join(md.data_sources) or "unknown"
+                add_log("price", ticker, SOURCE_REAL, f"{sources_str} — divergence {md.price_source_divergence:.2f}%")
                 return md
             logger.warning("Real data returned empty for %s, using mock", ticker)
         except Exception as exc:
+            add_log("price", ticker, SOURCE_ERROR, str(exc)[:120])
             logger.warning("Real data fetch failed for %s, using mock: %s", ticker, exc)
 
+    add_log("price", ticker, SOURCE_MOCK, "No API key or all providers failed")
     return _mock_market_data(ticker)
 
 

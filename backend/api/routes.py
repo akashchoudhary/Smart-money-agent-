@@ -171,6 +171,15 @@ async def arbitrage_signals(
 
 
 # ------------------------------------------------------------------
+# GET /logs  — data source log (real vs mock per engine per ticker)
+# ------------------------------------------------------------------
+@router.get("/logs")
+async def data_source_logs(limit: int = Query(100, le=200)):
+    from services.log_service import get_logs
+    return get_logs(limit)
+
+
+# ------------------------------------------------------------------
 # Export endpoints
 # ------------------------------------------------------------------
 @router.get("/export/csv")

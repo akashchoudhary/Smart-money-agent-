@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import useSWR from 'swr'
 import { fetchSignals, fetchAlerts, exportUrls, scoreColor, scoreLabel, fmtMoney, fmtMarketCap } from '../lib/api'
 import SignalsTable from '../components/SignalsTable'
@@ -6,11 +6,29 @@ import GammaRadar from '../components/GammaRadar'
 import DarkPoolFeed from '../components/DarkPoolFeed'
 import OptionsFlowTape from '../components/OptionsFlowTape'
 import AIBreakoutSignals from '../components/AIBreakoutSignals'
-import { Download, AlertTriangle, TrendingUp, BarChart2, Layers } from 'lucide-react'
+import { Download, AlertTriangle, TrendingUp, BarChart2, Search, X } from 'lucide-react'
+
+const STORAGE_KEY = 'smp_custom_tickers'
 
 export default function Dashboard() {
   const [minScore, setMinScore] = useState(0)
   const [signalFilter, setSignalFilter] = useState('')
+
+  // Search bar state
+  const [searchInput, setSearchInput] = useState('')
+  const [pinnedTicker, setPinnedTicker] = useState<string | null>(null)
+
+  // Custom added tickers (persisted to localStorage)
+  const [customTickers, setCustomTickers] = useState<string[]>(() => {
+    if (typeof window === 'undefined') return []
+    try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]') } catch { return [] }
+  })
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(customTickers))
+    }
+  }, [customTickers])
 
   const { data: signals = [], isLoading } = useSWR(
     ['signals', minScore, signalFilter],
@@ -23,11 +41,28 @@ export default function Dashboard() {
   const bullish = signals.filter(s => s.signal === 'bullish')
 
   const statCards = [
-    { label: 'Tracked Tickers', value: signals.length, color: '#3b82f6', icon: BarChart2 },
+    { label: 'Tracked Tickers', value: signals.length + customTickers.length + (pinnedTicker ? 1 : 0), color: '#3b82f6', icon: BarChart2 },
     { label: 'Explosive Setups', value: explosive.length, color: '#00d084', icon: TrendingUp },
     { label: 'Strong Positioning', value: strong.length, color: '#f97316', icon: TrendingUp },
     { label: 'Bullish Signals', value: bullish.length, color: '#00d084', icon: AlertTriangle },
   ]
+
+  const handleSearch = () => {
+    const t = searchInput.trim().toUpperCase()
+    if (!t) return
+    setPinnedTicker(t)
+    setSearchInput('')
+  }
+
+  const handleAddTicker = (ticker: string) => {
+    if (!customTickers.includes(ticker) && ticker !== pinnedTicker) {
+      setCustomTickers(prev => [...prev, ticker])
+    }
+  }
+
+  const handleRemoveTicker = (ticker: string) => {
+    setCustomTickers(prev => prev.filter(t => t !== ticker))
+  }
 
   return (
     <div className="space-y-6">
@@ -56,6 +91,46 @@ export default function Dashboard() {
             <Download className="w-3.5 h-3.5" /> JSON
           </a>
         </div>
+      </div>
+
+      {/* Search bar */}
+      <div className="glass-card p-4">
+        <div className="flex items-center gap-3">
+          <Search className="w-4 h-4 shrink-0" style={{ color: '#64748b' }} />
+          <input
+            value={searchInput}
+            onChange={e => setSearchInput(e.target.value.toUpperCase())}
+            onKeyDown={e => e.key === 'Enter' && handleSearch()}
+            placeholder="Search ticker — e.g. NVDA, AAPL, TSLA…"
+            maxLength={8}
+            className="flex-1 bg-transparent text-sm uppercase outline-none"
+            style={{ color: '#e2e8f0' }}
+          />
+          {searchInput && (
+            <button onClick={() => setSearchInput('')} style={{ color: '#64748b' }}>
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
+          <button
+            onClick={handleSearch}
+            disabled={!searchInput.trim()}
+            className="text-xs px-4 py-1.5 rounded-lg font-bold transition-all disabled:opacity-40"
+            style={{ background: '#3b82f6', color: '#fff' }}>
+            Search
+          </button>
+        </div>
+        {pinnedTicker && (
+          <div className="mt-2 flex items-center gap-2 text-xs" style={{ color: '#64748b' }}>
+            <span>Showing</span>
+            <span className="font-bold px-1.5 py-0.5 rounded" style={{ background: '#3b82f620', color: '#3b82f6' }}>
+              {pinnedTicker}
+            </span>
+            <span>at the top of the list</span>
+            <button onClick={() => setPinnedTicker(null)} className="ml-1 hover:text-red-400 transition-colors">
+              <X className="w-3 h-3" />
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Stat cards */}
@@ -105,7 +180,15 @@ export default function Dashboard() {
       </div>
 
       {/* Main signals table */}
-      <SignalsTable signals={signals} loading={isLoading} />
+      <SignalsTable
+        signals={signals}
+        loading={isLoading}
+        customTickers={customTickers}
+        pinnedTicker={pinnedTicker}
+        onAddTicker={handleAddTicker}
+        onRemoveTicker={handleRemoveTicker}
+        onClearPin={() => setPinnedTicker(null)}
+      />
 
       {/* Widget row */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4" style={{ minHeight: 360 }}>

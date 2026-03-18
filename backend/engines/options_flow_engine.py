@@ -14,6 +14,7 @@ from datetime import datetime, timedelta
 from typing import List, Optional
 
 from models.signals import OptionsFlowSignal, SignalDirection
+from services.log_service import add_log, SOURCE_REAL, SOURCE_MOCK, SOURCE_ERROR
 
 logger = logging.getLogger(__name__)
 
@@ -101,9 +102,11 @@ def _fetch_yahoo_options(ticker: str, price: float) -> Optional[List[OptionsFlow
         if not signals:
             return None
 
+        add_log("options", ticker, SOURCE_REAL, f"Yahoo Finance — {len(signals)} contracts across {min(len(expiries),3)} expiries")
         return sorted(signals, key=lambda s: s.premium, reverse=True)[:20]
 
     except Exception as exc:
+        add_log("options", ticker, SOURCE_ERROR, str(exc)[:120])
         logger.warning("Yahoo options fetch failed for %s: %s", ticker, exc)
         return None
 
@@ -161,6 +164,7 @@ def get_options_flow(ticker: str, price: float) -> List[OptionsFlowSignal]:
     real = _fetch_yahoo_options(ticker, price)
     if real is not None:
         return real
+    add_log("options", ticker, SOURCE_MOCK, "Yahoo Finance unavailable — seeded mock")
     return _mock_options_flow(ticker, price)
 
 

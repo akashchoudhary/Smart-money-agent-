@@ -12,6 +12,7 @@ from datetime import datetime, timedelta
 from typing import List, Optional
 
 from models.signals import InsiderTrade
+from services.log_service import add_log, SOURCE_REAL, SOURCE_MOCK, SOURCE_ERROR
 
 logger = logging.getLogger(__name__)
 
@@ -132,9 +133,11 @@ def _fetch_openinsider(ticker: str) -> Optional[List[InsiderTrade]]:
             except Exception:
                 continue
 
+        add_log("insider", ticker, SOURCE_REAL, f"OpenInsider scrape — {len(trades)} trades")
         return sorted(trades, key=lambda t: t.transaction_value, reverse=True)
 
     except Exception as exc:
+        add_log("insider", ticker, SOURCE_ERROR, str(exc)[:120])
         logger.warning("OpenInsider fetch failed for %s: %s", ticker, exc)
         return None
 
@@ -182,6 +185,7 @@ def get_insider_trades(ticker: str, price: float) -> List[InsiderTrade]:
     real = _fetch_openinsider(ticker)
     if real is not None:
         return real
+    add_log("insider", ticker, SOURCE_MOCK, "OpenInsider unavailable — seeded mock")
     return _mock_insider_trades(ticker, price)
 
 
