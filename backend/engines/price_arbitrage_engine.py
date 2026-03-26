@@ -11,6 +11,7 @@ Anomaly: if any two providers diverge by > DIVERGENCE_THRESHOLD_PCT, flag it.
 A divergence > 0.5% indicates latency arbitrage opportunity or data anomaly.
 """
 import logging
+import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
@@ -71,6 +72,7 @@ class ArbitrageResult:
 # ---------------------------------------------------------------------------
 
 def fetch_finnhub_quote(ticker: str, api_key: str) -> Optional[ProviderQuote]:
+    t0 = time.perf_counter()
     try:
         resp = httpx.get(
             f"{FINNHUB_BASE}/quote",
@@ -84,6 +86,7 @@ def fetch_finnhub_quote(ticker: str, api_key: str) -> Optional[ProviderQuote]:
         if price <= 0:
             logger.debug("Finnhub returned zero price for %s", ticker)
             return None
+        logger.debug("finnhub/%s  %.0fms", ticker, (time.perf_counter() - t0) * 1000)
         return ProviderQuote(
             source="finnhub",
             price=price,
@@ -94,11 +97,12 @@ def fetch_finnhub_quote(ticker: str, api_key: str) -> Optional[ProviderQuote]:
             open=float(d.get("o", price)),
         )
     except Exception as exc:
-        logger.warning("Finnhub quote failed for %s: %s", ticker, exc)
+        logger.warning("Finnhub quote failed for %s (%.0fms): %s", ticker, (time.perf_counter() - t0) * 1000, exc)
         return None
 
 
 def fetch_yahoo_quote(ticker: str) -> Optional[ProviderQuote]:
+    t0 = time.perf_counter()
     try:
         import yfinance as yf
         fi = yf.Ticker(ticker).fast_info
@@ -107,6 +111,7 @@ def fetch_yahoo_quote(ticker: str) -> Optional[ProviderQuote]:
             return None
         prev_close = float(fi.previous_close or price)
         change_pct = round((price - prev_close) / prev_close * 100, 4) if prev_close else 0.0
+        logger.debug("yahoo/%s  %.0fms", ticker, (time.perf_counter() - t0) * 1000)
         return ProviderQuote(
             source="yahoo",
             price=price,
@@ -117,11 +122,12 @@ def fetch_yahoo_quote(ticker: str) -> Optional[ProviderQuote]:
             open=float(getattr(fi, "open", price) or price),
         )
     except Exception as exc:
-        logger.warning("Yahoo Finance quote failed for %s: %s", ticker, exc)
+        logger.warning("Yahoo Finance quote failed for %s (%.0fms): %s", ticker, (time.perf_counter() - t0) * 1000, exc)
         return None
 
 
 def fetch_alphavantage_quote(ticker: str, api_key: str) -> Optional[ProviderQuote]:
+    t0 = time.perf_counter()
     try:
         resp = httpx.get(
             AV_BASE,
@@ -136,6 +142,7 @@ def fetch_alphavantage_quote(ticker: str, api_key: str) -> Optional[ProviderQuot
         if price <= 0:
             return None
         change_pct = float(gq.get("10. change percent", "0%").replace("%", ""))
+        logger.debug("alphavantage/%s  %.0fms", ticker, (time.perf_counter() - t0) * 1000)
         return ProviderQuote(
             source="alphavantage",
             price=price,
@@ -146,7 +153,7 @@ def fetch_alphavantage_quote(ticker: str, api_key: str) -> Optional[ProviderQuot
             open=float(gq.get("02. open", price)),
         )
     except Exception as exc:
-        logger.warning("Alpha Vantage quote failed for %s: %s", ticker, exc)
+        logger.warning("Alpha Vantage quote failed for %s (%.0fms): %s", ticker, (time.perf_counter() - t0) * 1000, exc)
         return None
 
 

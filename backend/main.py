@@ -2,6 +2,7 @@
 Smart Money Intelligence Platform — FastAPI entry point.
 """
 import logging
+import time
 from contextlib import asynccontextmanager
 
 # Patch Python's SSL to use the native macOS/Windows/Linux trust store.
@@ -13,8 +14,9 @@ try:
 except ImportError:
     pass
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from api.routes import router
 from database import init_db
@@ -24,6 +26,19 @@ logging.basicConfig(
     format="%(asctime)s | %(levelname)-8s | %(name)s — %(message)s",
 )
 logger = logging.getLogger(__name__)
+
+
+class RequestLoggingMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        start = time.perf_counter()
+        logger.info("→ %s %s", request.method, request.url.path)
+        response = await call_next(request)
+        duration_ms = (time.perf_counter() - start) * 1000
+        logger.info(
+            "← %s %s %d  %.0fms",
+            request.method, request.url.path, response.status_code, duration_ms,
+        )
+        return response
 
 
 @asynccontextmanager
@@ -53,6 +68,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+app.add_middleware(RequestLoggingMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],        # lock this down in production

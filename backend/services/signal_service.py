@@ -5,6 +5,8 @@ Orchestrates all engines, computes the Master Score, and caches results.
 import asyncio
 import json
 import logging
+import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from typing import List, Optional
 
@@ -71,14 +73,24 @@ def _redis_client() -> aioredis.Redis:
 
 
 def compute_master_signal(ticker: str) -> MasterSignal:
-    """Synchronous computation — wraps all engines."""
+    """Synchronous computation — wraps all engines, runs independent ones in parallel."""
+    t0 = time.perf_counter()
     mkt = get_market_data(ticker)
 
-    options_signals = get_options_flow(ticker, mkt.price)
-    dark_pool = get_dark_pool_signal(ticker, mkt.price)
-    gamma = get_gamma_exposure(ticker, mkt.price)
-    insider_trades = get_insider_trades(ticker, mkt.price)
-    institutional = get_institutional_flow(ticker, mkt.price)
+    # Run all independent engines in parallel (they only need mkt.price, not each other)
+    with ThreadPoolExecutor(max_workers=5) as exe:
+        f_options = exe.submit(get_options_flow, ticker, mkt.price)
+        f_dark    = exe.submit(get_dark_pool_signal, ticker, mkt.price)
+        f_gamma   = exe.submit(get_gamma_exposure, ticker, mkt.price)
+        f_insider = exe.submit(get_insider_trades, ticker, mkt.price)
+        f_inst    = exe.submit(get_institutional_flow, ticker, mkt.price)
+        options_signals = f_options.result(timeout=8)
+        dark_pool       = f_dark.result(timeout=8)
+        gamma           = f_gamma.result(timeout=8)
+        insider_trades  = f_insider.result(timeout=8)
+        institutional   = f_inst.result(timeout=8)
+
+    logger.debug("compute_master_signal(%s) engines done in %.0fms", ticker, (time.perf_counter() - t0) * 1000)
 
     # Sub-scores (0–100)
     options_score = compute_options_flow_score(options_signals)
@@ -153,11 +165,26 @@ async def get_all_signals(use_cache: bool = True) -> List[SignalResponse]:
             logger.warning("Redis read failed: %s", e)
 
     tickers = get_universe()
-    # Run all tickers concurrently in a thread pool
     loop = asyncio.get_event_loop()
-    signals_raw = await asyncio.gather(
-        *[loop.run_in_executor(None, compute_master_signal, t) for t in tickers]
-    )
+
+    # Run all tickers concurrently; drop any that time out rather than blocking the whole batch
+    async def _safe_compute(t: str):
+        try:
+            return await asyncio.wait_for(
+                loop.run_in_executor(None, compute_master_signal, t),
+                timeout=12.0,
+            )
+        except asyncio.TimeoutError:
+            logger.warning("compute_master_signal(%s) timed out — skipping", t)
+            return None
+        except Exception as exc:
+            logger.warning("compute_master_signal(%s) failed: %s", t, exc)
+            return None
+
+    t0 = time.perf_counter()
+    results = await asyncio.gather(*[_safe_compute(t) for t in tickers])
+    signals_raw = [s for s in results if s is not None]
+    logger.info("All %d/%d tickers computed in %.0fms", len(signals_raw), len(tickers), (time.perf_counter() - t0) * 1000)
 
     # Fire alerts asynchronously for high-score signals
     await asyncio.gather(
@@ -207,10 +234,12 @@ async def get_stock_detail(ticker: str) -> StockDetailResponse:
     master = await loop.run_in_executor(None, compute_master_signal, ticker)
 
     price = master.market_data.price
-    price_history = await loop.run_in_executor(None, get_price_history, ticker)
-    dark_pool_history = await loop.run_in_executor(None, get_dark_pool_history, ticker, price)
-    gamma_history = await loop.run_in_executor(None, get_gamma_history, ticker, price)
-    options_history = await loop.run_in_executor(None, get_options_flow, ticker, price)
+    price_history, dark_pool_history, gamma_history, options_history = await asyncio.gather(
+        loop.run_in_executor(None, get_price_history, ticker),
+        loop.run_in_executor(None, get_dark_pool_history, ticker, price),
+        loop.run_in_executor(None, get_gamma_history, ticker, price),
+        loop.run_in_executor(None, get_options_flow, ticker, price),
+    )
 
     from engines.ai_signal_engine import get_ai_signal
     ai = get_ai_signal(
